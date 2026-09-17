@@ -25,6 +25,10 @@ export const config = {
     password: process.env.SMTP_PASSWORD,
     audience: (process.env.AUDIENCE_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean),
   },
+  ack: {
+    baseUrl: process.env.ACK_BASE_URL,       // your API Gateway endpoint URL
+    teamLeadEmail: process.env.TEAM_LEAD_EMAIL,
+  },
   ollama: {
     host: process.env.OLLAMA_HOST,
     model: process.env.OLLAMA_MODEL,

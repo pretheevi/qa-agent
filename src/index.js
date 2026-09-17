@@ -8,7 +8,7 @@ import { log } from './utils/logger.js';
 async function run() {
   log('QA agent run started');
 
-  const html = await fetchLatestReportHtml();
+  const {html, subject}= await fetchLatestReportHtml();
   if (!html) {
     log('No report found for today. Exiting.');
     return;
@@ -22,11 +22,17 @@ async function run() {
 
   log(`${failures.length} failed testcase(s) found.`);
 
-  await markTestcasesFailed(failures);
+  let dbUpdateFailed = false;
+  try {
+    await markTestcasesFailed(failures);
+  } catch (err) {
+    dbUpdateFailed = true;
+    console.error('[DB] update failed, continuing to notify audience anyway:', err.message);
+  }
 
   const summary = await summarizeFailures(failures);
 
-  await sendFailureReport(failures, summary);
+  await sendFailureReport(subject, failures, summary, { dbUpdateFailed });
 
   log('QA agent run completed.');
 }

@@ -51,9 +51,14 @@ export async function fetchLatestReportHtml() {
           continue; // not the report email, keep looking
         }
 
+        // if (parsed.html) {
+        //   return parsed.html;
+        // }
+
         if (parsed.html) {
-          return parsed.html;
+          return { html: parsed.html, subject: parsed.subject };
         }
+        
       }
 
       return null;

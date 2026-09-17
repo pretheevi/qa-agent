@@ -20,4 +20,5 @@ export async function markTestcasesFailed(failures) {
   }
 
   // await connection.end();
+  throw new Error("failed to update db")
 }

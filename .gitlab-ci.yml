@@ -1,0 +1,11 @@
+qa-agent-main:
+  script:
+    - node src/index.js
+  rules:
+    - if: '$SCHEDULE_TYPE == "main"'
+
+qa-agent-reminder-check:
+  script:
+    - node src/reminder/checkReminders.js
+  rules:
+    - if: '$SCHEDULE_TYPE == "reminder"'

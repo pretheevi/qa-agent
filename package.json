@@ -8,10 +8,12 @@
     "start": "node src/index.js"
   },
   "dependencies": {
-    "imapflow": "^1.0.161",
-    "mailparser": "^3.7.1",
     "cheerio": "^1.0.0",
     "dotenv": "^16.4.5",
-    "nodemailer": "^6.9.14"
+    "imapflow": "^1.0.161",
+    "mailparser": "^3.7.1",
+    "nodemailer": "^6.9.14",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1"
   }
 }
