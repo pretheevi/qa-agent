@@ -1,0 +1,17 @@
+{
+  "name": "qa-agent",
+  "version": "1.0.0",
+  "description": "Scheduled agent that reads the daily QA testcase report from Gmail, updates the DB for failed testcases, and emails the audience.",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "imapflow": "^1.0.161",
+    "mailparser": "^3.7.1",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "nodemailer": "^6.9.14"
+  }
+}
