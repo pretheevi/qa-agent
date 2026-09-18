@@ -48,7 +48,8 @@ async function sendReminderEmail(row) {
 
   const dbWarning = row.db_update_failed
     ? `<p style="color:#b00020;"><strong>Note:</strong> the "${config.db.executeColumn}" update for these testcases did not complete successfully — please check manually.</p>
-      <p>${row.db_failed_message}</p>`
+      <p>${row.db_failed_message}</p>
+      <p style="color:#b00020;">QA-Agent will not update the "${config.db.executeColumn}" column for <em>any</em> testcase in this report if even one testcase ID is not found in the table — this is an all-or-nothing update.</p>`
     : '';
 
   const ackSubject = `Acknowledged - ${row.subject}`;
