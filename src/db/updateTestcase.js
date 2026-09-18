@@ -1,24 +1,26 @@
 import { config } from '../config/config.js';
-// Swap in your driver of choice: mysql2, pg, mssql, etc.
-// import mysql from 'mysql2/promise';
+import { pool } from './pool.js';
 
 export async function markTestcasesFailed(failures) {
-  // const connection = await mysql.createConnection({
-  //   host: config.db.host,
-  //   port: config.db.port,
-  //   database: config.db.name,
-  //   user: config.db.user,
-  //   password: config.db.password,
-  // });
-
+  const notFound = [];
   for (const failure of failures) {
-    // await connection.execute(
-    //   `UPDATE ${config.db.table} SET ${config.db.statusColumn} = 'no' WHERE ${config.db.testcaseColumn} = ?`,
-    //   [failure.testcaseId]
-    // );
-    console.log(`[DB] would set ${config.db.statusColumn}='no' for ${failure.testcaseId}`);
+    const [rows] = await pool.execute(
+      `SELECT * FROM ${config.db.table} WHERE ${config.db.testcaseNameColumn} = ?`,
+      [failure.testcaseId]
+    );
+    if (rows.length === 0) {
+      notFound.push(failure.testcaseId);
+    }
+  }
+  if (notFound.length > 0) {
+    throw new Error(`Testcase(s) not found in ${config.db.table}: ${notFound.join(', ')}`);
   }
 
-  // await connection.end();
-  throw new Error("failed to update db")
+  // for (const failure of failures) {
+  //   await pool.execute(
+  //     `UPDATE ${config.db.table} SET ${config.db.executeColumn} = 'no' WHERE ${config.db.testcaseNameColumn} = ?`,
+  //     [failure.testcaseId]
+  //   );
+  //   console.log(`[DB] set ${config.db.executeColumn}='no' for ${failure.testcaseId}`);
+  // }
 }

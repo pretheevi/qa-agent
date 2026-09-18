@@ -15,8 +15,8 @@ export const config = {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     table: process.env.DB_TABLE,
-    testcaseColumn: process.env.DB_TESTCASE_COLUMN,
-    statusColumn: process.env.DB_STATUS_COLUMN,
+    testcaseNameColumn: process.env.DB_TESTCASE_NAME_COLUMN,
+    executeColumn: process.env.DB_EXECUTE_COLUMN,
   },
   smtp: {
     host: process.env.SMTP_HOST,
@@ -24,10 +24,6 @@ export const config = {
     user: process.env.SMTP_USER,
     password: process.env.SMTP_PASSWORD,
     audience: (process.env.AUDIENCE_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean),
-  },
-  ack: {
-    baseUrl: process.env.ACK_BASE_URL,       // your API Gateway endpoint URL
-    teamLeadEmail: process.env.TEAM_LEAD_EMAIL,
   },
   ollama: {
     host: process.env.OLLAMA_HOST,
