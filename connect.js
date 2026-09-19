@@ -15,6 +15,7 @@ function getDb() {
           first_sent_at TEXT,
           db_update_failed INTEGER DEFAULT 0,
           db_failed_message TEXT,
+          summary TEXT,
           reminder_count INTEGER DEFAULT 0,
           acknowledged INTEGER DEFAULT 0,
           acknowledged_by TEXT,
@@ -32,13 +33,13 @@ export async function getCachedReport(reportDate) {
   return db.get('SELECT subject, html FROM report_cache WHERE report_date = ?', [reportDate]);
 }
 
-export async function saveReportCache(reportDate, subject, html, { dbUpdateFailed = false, dbFailedMessage = '', acknowledged = false } = {}) {
+export async function saveReportCache(reportDate, subject, html, { dbUpdateFailed = false, dbFailedMessage = '', summary = '', acknowledged = false } = {}) {
   const db = await getDb();
   await db.run(
-    `INSERT INTO report_cache (report_date, subject, html, created_at, first_sent_at, db_update_failed, db_failed_message, reminder_count, acknowledged)
-     VALUES (?, ?, ?, datetime('now'), datetime('now'), ?, ?, 0, ?)
+    `INSERT INTO report_cache (report_date, subject, html, created_at, first_sent_at, db_update_failed, db_failed_message, summary, reminder_count, acknowledged)
+     VALUES (?, ?, ?, datetime('now'), datetime('now'), ?, ?, ?, 0, ?)
      ON CONFLICT(report_date) DO UPDATE SET subject = excluded.subject, html = excluded.html, created_at = excluded.created_at`,
-    [reportDate, subject, html, dbUpdateFailed ? 1 : 0, dbFailedMessage, acknowledged ? 1 : 0]
+    [reportDate, subject, html, dbUpdateFailed ? 1 : 0, dbFailedMessage, summary, acknowledged ? 1 : 0]
   );
 }
 

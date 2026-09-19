@@ -16,25 +16,27 @@ export async function fetchLatestReportHtml() {
     logger: false,
   });
 
+  console.log(`[Gmail] Connecting to ${config.gmail.user} to look for today's report...`);
   await client.connect();
 
   try {
     const lock = await client.getMailboxLock('INBOX');
     try {
-      // Search today's mail from the report sender.
-      const since = new Date('2026-09-17'); // TESTING: forced date, revert before real runs
+      const since = new Date(config.today);
       since.setHours(0, 0, 0, 0);
-      const before = new Date('2026-09-18'); // TESTING: forced date, revert before real runs
 
-      const searchCriteria = { since, before };
+      const searchCriteria = { since };
       if (config.gmail.reportSender) {
         searchCriteria.from = config.gmail.reportSender;
       }
 
+      console.log(`[Gmail] Searching INBOX since ${since.toDateString()}${config.gmail.reportSender ? ` from ${config.gmail.reportSender}` : ''}...`);
       const uids = await client.search(searchCriteria, { uid: true });
       if (!uids || uids.length === 0) {
-        return null; // no report found for today
+        console.log('[Gmail] No matching mail found for today.');
+        return { html: null, subject: null };
       }
+      console.log(`[Gmail] Found ${uids.length} candidate message(s), checking newest first...`);
 
       // Walk newest-first, optionally matching subject too.
       const sortedUids = [...uids].sort((a, b) => b - a);
@@ -49,16 +51,18 @@ export async function fetchLatestReportHtml() {
           config.gmail.reportSubject &&
           !parsed.subject?.toLowerCase().includes(config.gmail.reportSubject.toLowerCase())
         ) {
+          console.log(`[Gmail] Skipping non-matching subject: "${parsed.subject}"`);
           continue; // not the report email, keep looking
         }
 
         if (parsed.html) {
+          console.log(`[Gmail] Using report: "${parsed.subject}"`);
           return { html: parsed.html, subject: parsed.subject };
         }
-        
       }
 
-      return null;
+      console.log('[Gmail] No candidate had a matching subject with HTML content.');
+      return { html: null, subject: null };
     } finally {
       lock.release();
     }
@@ -67,10 +71,10 @@ export async function fetchLatestReportHtml() {
   }
 }
 
-// Searches INBOX for acknowledgment replies (subject convention: "Acknowledged - <original subject>")
-// received since the given date. Returns [{ subject, from }] for the caller to match against
-// pending report rows.
-export async function findAcknowledgmentReplies({ since }) {
+// Fetches every INBOX message received since the given date, with no subject/sender filtering.
+// Returns [{ subject, from }] for the caller (remainder.js) to match against pending report rows
+// and decide what actually counts as an acknowledgment.
+export async function fetchInboxSince({ since }) {
   const client = new ImapFlow({
     host: 'imap.gmail.com',
     port: 993,
@@ -87,8 +91,10 @@ export async function findAcknowledgmentReplies({ since }) {
   try {
     const lock = await client.getMailboxLock('INBOX');
     try {
-      const uids = await client.search({ since, subject: 'Acknowledged -' }, { uid: true });
+      console.log(`[Gmail] Scanning INBOX for replies since ${since.toISOString()}...`);
+      const uids = await client.search({ since }, { uid: true });
       if (!uids || uids.length === 0) {
+        console.log('[Gmail] No inbox messages found in that window.');
         return [];
       }
 
@@ -103,6 +109,7 @@ export async function findAcknowledgmentReplies({ since }) {
           from: parsed.from?.value?.[0]?.address?.toLowerCase() || '',
         });
       }
+      console.log(`[Gmail] Parsed ${replies.length} inbox message(s) to check against pending reports.`);
       return replies;
     } finally {
       lock.release();

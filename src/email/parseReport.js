@@ -34,3 +34,23 @@ export function extractFailedTestcases(html) {
 
   return failures;
 }
+
+// Parses the "Status Summary" line (Passed: N (X%) Failed: N ... Total: N) into counts.
+// Returns null for any field it can't find rather than guessing.
+export function extractSummaryCounts(html) {
+  const $ = cheerio.load(html);
+  const text = $.root().text();
+
+  const pick = label => {
+    const match = text.match(new RegExp(`${label}:\\s*(\\d+)`, 'i'));
+    return match ? Number(match[1]) : null;
+  };
+
+  return {
+    passed: pick('Passed'),
+    failed: pick('Failed'),
+    skipped: pick('Skipped'),
+    flaky: pick('Flaky'),
+    total: pick('Total'),
+  };
+}

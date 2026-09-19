@@ -2,6 +2,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const config = {
+  // Single source of truth for "today". Override with TODAY_DATE (e.g. "2026-09-17") to
+  // test against a specific date instead of editing dates inside individual files.
+  today: process.env.TODAY_DATE ? new Date(process.env.TODAY_DATE) : new Date(),
   gmail: {
     user: process.env.GMAIL_USER,
     appPassword: process.env.GMAIL_APP_PASSWORD,
