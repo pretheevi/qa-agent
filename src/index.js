@@ -4,14 +4,14 @@ import { markTestcasesFailed } from './db/updateTestcase.js';
 import { summarizeFailures } from './summarize/llmSummary.js';
 import { sendRemainder } from './reminder/remainder.js';
 import { log } from './utils/logger.js';
-import { config } from './config/config.js';
+import { config, toLocalDateKey } from './config/config.js';
 import { pool } from './db/pool.js';
 import { getCachedReport, saveReportCache, closeLocalDb } from '../connect.js';
 
 async function run() {
   log('QA agent run started');
 
-  const today = config.today.toISOString().slice(0, 10);
+  const today = toLocalDateKey(config.today);
   log(`Checking local cache for today's report (${today})...`);
   const cached = await getCachedReport(today);
 

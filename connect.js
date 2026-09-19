@@ -38,16 +38,19 @@ export async function saveReportCache(reportDate, subject, html, { dbUpdateFaile
   await db.run(
     `INSERT INTO report_cache (report_date, subject, html, created_at, first_sent_at, db_update_failed, db_failed_message, summary, reminder_count, acknowledged)
      VALUES (?, ?, ?, datetime('now'), datetime('now'), ?, ?, ?, 0, ?)
-     ON CONFLICT(report_date) DO UPDATE SET subject = excluded.subject, html = excluded.html, created_at = excluded.created_at`,
+     ON CONFLICT(report_date) DO UPDATE SET
+       subject = excluded.subject,
+       html = excluded.html,
+       created_at = excluded.created_at,
+       db_update_failed = excluded.db_update_failed,
+       db_failed_message = excluded.db_failed_message,
+       summary = excluded.summary`,
     [reportDate, subject, html, dbUpdateFailed ? 1 : 0, dbFailedMessage, summary, acknowledged ? 1 : 0]
   );
 }
 
-export async function getUnacknowledgedReports({ excludeDate } = {}) {
+export async function getUnacknowledgedReports() {
   const db = await getDb();
-  if (excludeDate) {
-    return db.all('SELECT * FROM report_cache WHERE acknowledged = 0 AND report_date != ?', [excludeDate]);
-  }
   return db.all('SELECT * FROM report_cache WHERE acknowledged = 0');
 }
 

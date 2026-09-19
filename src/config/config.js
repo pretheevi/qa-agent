@@ -1,6 +1,16 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+// Local (not UTC) calendar-day string, so the cache-key date always matches the same
+// day boundary that IMAP searches use (since.setHours(0,0,0,0) is local-time based —
+// toISOString() is UTC and drifts a day off near midnight in non-UTC timezones).
+export function toLocalDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export const config = {
   // Single source of truth for "today". Override with TODAY_DATE (e.g. "2026-09-17") to
   // test against a specific date instead of editing dates inside individual files.
@@ -26,7 +36,9 @@ export const config = {
     port: process.env.SMTP_PORT,
     user: process.env.SMTP_USER,
     password: process.env.SMTP_PASSWORD,
-    audience: (process.env.AUDIENCE_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean),
+    // Lowercased to match reply.from in gmailClient.js (mailparser addresses are lowercased
+    // there) — otherwise a mixed-case address in AUDIENCE_EMAILS would never match a reply.
+    audience: (process.env.AUDIENCE_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean),
   },
   ollama: {
     host: process.env.OLLAMA_HOST,
