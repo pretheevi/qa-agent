@@ -16,11 +16,11 @@ export async function markTestcasesFailed(failures) {
     throw new Error(`Testcase(s) not found in ${config.db.table}: ${notFound.join(', ')}`);
   }
 
-  // for (const failure of failures) {
-  //   await pool.execute(
-  //     `UPDATE ${config.db.table} SET ${config.db.executeColumn} = 'no' WHERE ${config.db.testcaseNameColumn} = ?`,
-  //     [failure.testcaseId]
-  //   );
-  //   console.log(`[DB] set ${config.db.executeColumn}='no' for ${failure.testcaseId}`);
-  // }
+  for (const failure of failures) {
+    await pool.execute(
+      `UPDATE ${config.db.table} SET ${config.db.executeColumn} = 'no' WHERE ${config.db.testcaseNameColumn} = ?`,
+      [failure.testcaseId]
+    );
+    console.log(`[DB] set ${config.db.executeColumn}='no' for ${failure.testcaseId}`);
+  }
 }

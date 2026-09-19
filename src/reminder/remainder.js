@@ -80,6 +80,20 @@ export async function sendRemainder() {
       });
     }
 
+    if (row.reminder_count > config.maxReminders && config.gmail.reportSender) {
+      console.log(`[Reminder] ${row.report_date} has ${row.reminder_count} reminder(s) with no acknowledgment (max: ${config.maxReminders}) — escalating to ${config.gmail.reportSender}.`);
+      await transporter.sendMail({
+        from: config.smtp.user,
+        to: config.gmail.reportSender,
+        subject: `ESCALATION: No acknowledgment after ${row.reminder_count} reminders — ${row.subject}`,
+        html: `
+          <p>No one in the audience has acknowledged this report after <strong>${row.reminder_count}</strong> reminder(s).</p>
+          <p>Report: "${row.subject}" (${row.report_date})</p>
+          <p>Audience notified: ${config.smtp.audience.join(', ')}</p>
+        `,
+      });
+    }
+
     await incrementReminder(row.report_date);
     console.log(`[Reminder] sent ${subjectPrefix} (#${row.reminder_count + 1}) for ${row.report_date}`);
   }

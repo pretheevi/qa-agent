@@ -1,11 +1,11 @@
-qa-agent-main:
+qa-agent:
+  image: node:20
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  cache:
+    key: qa-agent-local-db
+    paths:
+      - local.db
   script:
+    - npm ci
     - node src/index.js
-  rules:
-    - if: '$SCHEDULE_TYPE == "main"'
-
-qa-agent-reminder-check:
-  script:
-    - node src/reminder/checkReminders.js
-  rules:
-    - if: '$SCHEDULE_TYPE == "reminder"'

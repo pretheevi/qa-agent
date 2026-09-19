@@ -32,4 +32,7 @@ export const config = {
     host: process.env.OLLAMA_HOST,
     model: process.env.OLLAMA_MODEL,
   },
+  // Once a report has been reminded more than this many times with no acknowledgment,
+  // remainder.js also escalates to gmail.reportSender on every subsequent run.
+  maxReminders: process.env.MAX_REMINDERS ? Number(process.env.MAX_REMINDERS) : 3,
 };
