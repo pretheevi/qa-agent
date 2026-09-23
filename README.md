@@ -100,7 +100,8 @@ reply is recorded once it's handled, so it's never processed twice.
 | Variable | Used for |
 |---|---|
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` | IMAP login — also the mailbox `fetchInboxSince` scans for replies |
-| `GMAIL_REPORT_SENDER`, `GMAIL_REPORT_SUBJECT` | Filters which inbox email counts as the daily report |
+| `GMAIL_REPORT_SENDERS` | Comma-separated sender list — filters which inbox email is even considered |
+| `GMAIL_REPORT_SUBJECT_NOVA`, `GMAIL_REPORT_SUBJECT_ATLAS` | Comma-separated subject substrings that classify a candidate email as NOVA or Atlas — independent lists, not positions in one shared list |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | MySQL connection (`mysql2` pool), shared by both the testcase table and the agent's own tables below |
 | `DB_TABLE`, `DB_TESTCASE_NAME_COLUMN`, `DB_EXECUTE_COLUMN` | Which QA testcase table/columns `markTestcaseForAtlas` checks and updates |
 | `DB_REPORT_CACHE_TABLE`, `DB_REPORT_NOTIFICATIONS_TABLE`, `DB_REPLY_RECEIPTS_TABLE` | Table names for the agent's own report cache / per-recipient notification / acknowledgment tracking (`connect.js`) — auto-created if missing; column names are fixed in `config.js` |

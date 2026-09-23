@@ -26,9 +26,28 @@ async function run() {
       log(`Found ${reports.length} latest report(s) for today.`);
 
       for (const report of reports) {
-        const { html, subject, reportType, failedTestCases } = report;
+        const { html, subject, reportType, failedTestCases, parseFailed, parseFailedMessage } = report;
 
         log(`Processing ${reportType} report: "${subject}"`);
+
+        if (parseFailed) {
+          log(`${reportType} — Report content could not be parsed: ${parseFailedMessage}`);
+
+          await saveReportCache(
+            today,
+            reportType,
+            subject,
+            html,
+            {
+              reportType,
+              reportParseFailed: true,
+              reportParseFailedMessage: parseFailedMessage,
+            }
+          );
+
+          log(`${reportType} report cached as unacknowledged (parse failure) for today.`);
+          continue;
+        }
 
         const failures = failedTestCases || [];
 

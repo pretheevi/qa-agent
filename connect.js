@@ -3,6 +3,19 @@ import { config } from './src/config/config.js';
 
 let schemaReady;
 
+// Adds a column to an already-existing table if it's missing — for columns introduced
+// after a table was first created elsewhere (CREATE TABLE IF NOT EXISTS is a no-op then).
+async function ensureColumn(table, column, columnDefSql) {
+  const [rows] = await pool.execute(
+    `SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [table, column]
+  );
+
+  if (rows.length === 0) {
+    await pool.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${columnDefSql}`);
+  }
+}
+
 function ensureSchema() {
   if (!schemaReady) {
     schemaReady = (async () => {
@@ -21,6 +34,8 @@ function ensureSchema() {
           ${rc.columns.dbUpdateFailed} TINYINT(1) DEFAULT 0,
           ${rc.columns.dbFailedMessage} TEXT,
           ${rc.columns.dbUpdateDetails} TEXT,
+          ${rc.columns.reportParseFailed} TINYINT(1) DEFAULT 0,
+          ${rc.columns.reportParseFailedMessage} TEXT,
           ${rc.columns.summary} TEXT,
           ${rc.columns.reminderCount} INT DEFAULT 0,
           ${rc.columns.acknowledged} TINYINT(1) DEFAULT 0,
@@ -29,6 +44,11 @@ function ensureSchema() {
           PRIMARY KEY (${rc.columns.reportDate}, ${rc.columns.reportType})
         )
       `);
+
+      // Migration for a report_cache table created before these columns existed —
+      // CREATE TABLE IF NOT EXISTS above is a no-op against an already-existing table.
+      await ensureColumn(rc.table, rc.columns.reportParseFailed, 'TINYINT(1) DEFAULT 0');
+      await ensureColumn(rc.table, rc.columns.reportParseFailedMessage, 'TEXT');
 
       // One row per email actually sent to one recipient, so a reply can be traced back
       // to exactly who it was sent to (a single shared column can't survive a multi-recipient
@@ -86,6 +106,8 @@ export async function saveReportCache(
     dbUpdateFailed = false,
     dbFailedMessage = '',
     dbUpdateDetails = null,
+    reportParseFailed = false,
+    reportParseFailedMessage = '',
     summary = '',
     acknowledged = false,
   } = {}
@@ -106,11 +128,13 @@ export async function saveReportCache(
       ${c.dbUpdateFailed},
       ${c.dbFailedMessage},
       ${c.dbUpdateDetails},
+      ${c.reportParseFailed},
+      ${c.reportParseFailedMessage},
       ${c.summary},
       ${c.reminderCount},
       ${c.acknowledged}
     )
-    VALUES (?, ?, ?, ?, NOW(), NOW(), ?, ?, ?, ?, 0, ?)
+    VALUES (?, ?, ?, ?, NOW(), NOW(), ?, ?, ?, ?, ?, ?, 0, ?)
     ON DUPLICATE KEY UPDATE
       ${c.subject} = VALUES(${c.subject}),
       ${c.html} = VALUES(${c.html}),
@@ -118,6 +142,8 @@ export async function saveReportCache(
       ${c.dbUpdateFailed} = VALUES(${c.dbUpdateFailed}),
       ${c.dbFailedMessage} = VALUES(${c.dbFailedMessage}),
       ${c.dbUpdateDetails} = VALUES(${c.dbUpdateDetails}),
+      ${c.reportParseFailed} = VALUES(${c.reportParseFailed}),
+      ${c.reportParseFailedMessage} = VALUES(${c.reportParseFailedMessage}),
       ${c.summary} = VALUES(${c.summary})`,
     [
       reportDate,
@@ -127,6 +153,8 @@ export async function saveReportCache(
       dbUpdateFailed ? 1 : 0,
       dbFailedMessage,
       dbUpdateDetails ? JSON.stringify(dbUpdateDetails) : null,
+      reportParseFailed ? 1 : 0,
+      reportParseFailedMessage,
       summary,
       acknowledged ? 1 : 0,
     ]

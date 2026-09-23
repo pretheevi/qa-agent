@@ -2,7 +2,7 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { config } from '../config/config.js';
 
-import {extractNOVAFailedTestcases, atlasDemographicExtractFailedTC} from './parseReport.js';
+import { extractNOVAFailedTestcases, atlasDemographicExtractFailedTC, isValidAtlasReportHtml } from './parseReport.js';
 
 export async function fetchLatestReportHtml() {
   const client = new ImapFlow({
@@ -60,18 +60,21 @@ export async function fetchLatestReportHtml() {
         if (!message?.source) continue;
 
         const parsed = await simpleParser(message.source);
-        // find the subject that matched in report gmail
-        const matchedReportSubject = config.gmail.reportSubject?.find(
-          reportSubject => parsed.subject?.toLowerCase().includes(reportSubject.toLowerCase())
-        );
+        const subjectLower = parsed.subject?.toLowerCase() || '';
 
-        if (!matchedReportSubject) {
+        // Classified independently by which type's own subject list it matches — NOT by
+        // position in a shared list, which previously misrouted whichever report happened
+        // to be the only one configured into the NOVA branch.
+        const isNova = config.gmail.reportSubjectNova.some(s => subjectLower.includes(s.toLowerCase()));
+        const isAtlas = config.gmail.reportSubjectAtlas.some(s => subjectLower.includes(s.toLowerCase()));
+
+        if (!isNova && !isAtlas) {
           console.log(`[Gmail] Skipping non-matching subject: "${parsed.subject}"`);
           continue;
         }
 
         // NOVA
-        if (matchedReportSubject === config.gmail.reportSubject[0] && !foundTypes.has('NOVA')) {
+        if (isNova && !foundTypes.has('NOVA')) {
           console.log(`[NOVA] Processing report: "${parsed.subject}"`);
 
           const failures = extractNOVAFailedTestcases(parsed);
@@ -91,7 +94,7 @@ export async function fetchLatestReportHtml() {
         }
 
         // ATLAS
-        if (matchedReportSubject === config.gmail.reportSubject[1] && !foundTypes.has('ATLAS')) {
+        if (isAtlas && !foundTypes.has('ATLAS')) {
           console.log(`[Atlas] Processing report: "${parsed.subject}"`);
           console.log(`[Atlas] Total attachments: ${parsed.attachments?.length || 0}`);
 
@@ -131,16 +134,30 @@ export async function fetchLatestReportHtml() {
 
           console.log(`[Atlas] HTML length: ${atlasHtml.length}`);
 
-          const failures = atlasDemographicExtractFailedTC(atlasHtml);
+          let failures = [];
+          let parseFailed = false;
+          let parseFailedMessage = '';
 
-          console.log(`[Atlas] Extracted ${failures.length} failed test case(s).`);
-          // console.log('[Atlas] Failed test cases:', JSON.stringify(failures, null, 2));
+          if (!isValidAtlasReportHtml(atlasHtml)) {
+            parseFailed = true;
+            parseFailedMessage =
+              `Attachment content looks truncated or corrupted (only ${atlasHtml.length} ` +
+              `character(s), missing expected report structure) — could not extract failed ` +
+              `testcases. This can happen when a report email is manually forwarded and the ` +
+              `attachment doesn't come through intact.`;
+            console.error(`[Atlas] ${parseFailedMessage}`);
+          } else {
+            failures = atlasDemographicExtractFailedTC(atlasHtml);
+            console.log(`[Atlas] Extracted ${failures.length} failed test case(s).`);
+          }
 
           reports.push({
             html: atlasHtml,
             subject: parsed.subject,
             reportType: 'ATLAS',
             failedTestCases: failures,
+            parseFailed,
+            parseFailedMessage,
           });
 
           foundTypes.add('ATLAS');

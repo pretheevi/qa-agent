@@ -33,7 +33,11 @@ export const config = {
     user: requireEnv('GMAIL_USER'),
     appPassword: requireEnv('GMAIL_APP_PASSWORD'),
     reportSender: requireEnv('GMAIL_REPORT_SENDERS').split(",").map(s => s.trim()).filter(Boolean),
-    reportSubject: requireEnv('GMAIL_REPORT_SUBJECT').split(",").map(s => s.trim()).filter(Boolean),
+    // Separate, explicit subject filters per report type — NOT positions in one shared list.
+    // A message is classified by which one it actually matches, so the count/order of either
+    // list can't silently misroute a report into the wrong type.
+    reportSubjectNova: requireEnv('GMAIL_REPORT_SUBJECT_NOVA').split(",").map(s => s.trim()).filter(Boolean),
+    reportSubjectAtlas: requireEnv('GMAIL_REPORT_SUBJECT_ATLAS').split(",").map(s => s.trim()).filter(Boolean),
   },
   db: {
     host: requireEnv('DB_HOST'),
@@ -74,6 +78,8 @@ export const config = {
         dbUpdateFailed: 'db_update_failed',
         dbFailedMessage: 'db_failed_message',
         dbUpdateDetails: 'db_update_details',
+        reportParseFailed: 'report_parse_failed',
+        reportParseFailedMessage: 'report_parse_failed_message',
         summary: 'summary',
         reminderCount: 'reminder_count',
         acknowledged: 'acknowledged',

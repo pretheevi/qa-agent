@@ -71,6 +71,17 @@ export function extractSummaryCounts(html) {
 // ATLAS DEMOGRAPHIC SERVICE
 // ============================================================
 
+const MIN_VALID_ATLAS_HTML_LENGTH = 500;
+
+// A genuine Atlas report is a full multi-testcase HTML document — hundreds of KB at least,
+// even with 0 failures. A truncated/corrupted attachment (e.g. mangled by a manual Gmail
+// forward) still parses without error but yields 0 .test-item matches, which looks exactly
+// like "0 failures" — so this catches that case before it's silently treated as a clean run.
+export function isValidAtlasReportHtml(html) {
+  if (!html || html.length < MIN_VALID_ATLAS_HTML_LENGTH) return false;
+  return /<html[\s>]/i.test(html);
+}
+
 export function atlasDemographicExtractFailedTC(htmlInput) {
   try {
     if (!htmlInput) {

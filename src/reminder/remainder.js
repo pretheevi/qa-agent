@@ -186,10 +186,14 @@ async function sendReportReminders(reportType) {
 
     let failures = [];
 
-    if (reportType === 'NOVA') {
-      failures = extractNOVAFailedTestcases({ html: row.html });
-    } else if (reportType === 'ATLAS') {
-      failures = atlasDemographicExtractFailedTC(row.html);
+    // A parse-failed report's html is known-corrupt — don't re-run it through the extractor,
+    // there's nothing valid to show.
+    if (!row.report_parse_failed) {
+      if (reportType === 'NOVA') {
+        failures = extractNOVAFailedTestcases({ html: row.html });
+      } else if (reportType === 'ATLAS') {
+        failures = atlasDemographicExtractFailedTC(row.html);
+      }
     }
 
     let dbStatusByTestCase = {};
@@ -252,6 +256,18 @@ async function sendReportReminders(reportType) {
       `
       : '';
 
+    const parseFailureWarning = row.report_parse_failed
+      ? `
+        <p style="color:#b00020;">
+          <strong>Note:</strong> this report's content could not be read — it may have been
+          corrupted or truncated in transit (e.g. a manually forwarded copy losing its
+          attachment). No testcase details are available below, and the database was not
+          checked or updated. Please locate and review the original report manually.
+        </p>
+        <p>${row.report_parse_failed_message}</p>
+      `
+      : '';
+
     const escalationNote = config.gmail.reportSender?.length
       ? `
         <p style="color:#555;font-size:0.9em;">
@@ -264,14 +280,17 @@ async function sendReportReminders(reportType) {
     const html = `
       ${isFirstSend && row.summary ? `<p>${row.summary}</p>` : ''}
       ${!isFirstSend ? `<p><strong>Reminder (#${row.reminder_count}):</strong> this report is still unacknowledged.</p>` : ''}
+      ${parseFailureWarning}
       ${dbWarning}
       ${ackInstructionsHtml()}
       ${escalationNote}
 
-      <table border="1" cellpadding="6" cellspacing="0">
-        ${headers}
-        ${rows}
-      </table>
+      ${row.report_parse_failed ? '' : `
+        <table border="1" cellpadding="6" cellspacing="0">
+          ${headers}
+          ${rows}
+        </table>
+      `}
     `;
 
     for (const email of audience) {
