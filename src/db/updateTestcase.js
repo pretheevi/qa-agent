@@ -1,34 +1,54 @@
 import { config } from '../config/config.js';
 import { pool } from './pool.js';
 
-export async function markTestcasesFailed(failures) {
+export async function markTestcaseForAtlas(failures) {
   const notFound = [];
+
   for (const failure of failures) {
+    const testCaseName = failure.testCaseName;
+
     const [rows] = await pool.execute(
       `SELECT * FROM ${config.db.table} WHERE ${config.db.testcaseNameColumn} = ?`,
-      [failure.testcaseId]
+      [testCaseName]
     );
+
     if (rows.length === 0) {
-      notFound.push(failure.testcaseId);
+      notFound.push(testCaseName);
     }
-  }
-  if (notFound.length > 0) {
-    throw new Error(`Testcase(s) not found in ${config.db.table}: ${notFound.join(', ')}`);
   }
 
-  // Single connection + transaction: if any UPDATE in the loop fails partway through,
-  // roll back everything rather than leaving a partial write (autocommit per pool.execute()
-  // call would otherwise break the all-or-nothing guarantee promised to the audience).
+  if (notFound.length > 0) {
+    throw new Error(
+      `Atlas testcase(s) not found in ${config.db.table}: ${notFound.join(', ')}`
+    );
+  }
+
   const connection = await pool.getConnection();
+  const results = [];
+
   try {
     await connection.beginTransaction();
+
     for (const failure of failures) {
-      await connection.execute(
-        `UPDATE ${config.db.table} SET ${config.db.executeColumn} = 'no' WHERE ${config.db.testcaseNameColumn} = ?`,
-        [failure.testcaseId]
+      const testCaseName = failure.testCaseName;
+
+      const [result] = await connection.execute(
+        `UPDATE ${config.db.table}
+        SET ${config.db.executeColumn} = 'no'
+        WHERE ${config.db.testcaseNameColumn} = ?
+          AND ${config.db.executeColumn} != 'no'`,
+        [testCaseName]
       );
-      console.log(`[DB] set ${config.db.executeColumn}='no' for ${failure.testcaseId}`);
+
+      if (result.affectedRows > 0) {
+        console.log(`[DB][Atlas] set ${config.db.executeColumn}='no' for ${testCaseName}`);
+        results.push({ testCaseName, status: 'set' });
+      } else {
+        console.log(`[DB][Atlas] ${testCaseName} already has ${config.db.executeColumn}='no'`);
+        results.push({ testCaseName, status: 'already-no' });
+      }
     }
+
     await connection.commit();
   } catch (err) {
     await connection.rollback();
@@ -36,4 +56,6 @@ export async function markTestcasesFailed(failures) {
   } finally {
     connection.release();
   }
+
+  return results;
 }

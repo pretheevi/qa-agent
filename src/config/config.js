@@ -18,8 +18,8 @@ export const config = {
   gmail: {
     user: process.env.GMAIL_USER,
     appPassword: process.env.GMAIL_APP_PASSWORD,
-    reportSender: process.env.GMAIL_REPORT_SENDER,
-    reportSubject: process.env.GMAIL_REPORT_SUBJECT,
+    reportSender: process.env.GMAIL_REPORT_SENDERS.split(",").map(s => s.trim()).filter(Boolean),
+    reportSubject: process.env.GMAIL_REPORT_SUBJECT.split(",").map(s => s.trim()).filter(Boolean),
   },
   db: {
     host: process.env.DB_HOST,
