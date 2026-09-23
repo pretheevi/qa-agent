@@ -7,4 +7,7 @@ export const pool = mysql.createPool({
   database: config.db.name,
   user: config.db.user,
   password: config.db.password,
+  // Return DATETIME/DATE columns as plain strings instead of JS Date objects, so
+  // report_cache rows behave the same as they did when local.db was sqlite.
+  dateStrings: true,
 });

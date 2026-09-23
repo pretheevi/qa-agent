@@ -9,7 +9,7 @@ Scheduled agent that:
 4. Optionally summarizes failures in plain language via a local LLM (Ollama)
 5. Emails the report to the audience, then keeps reminding them every run until someone
    acknowledges it by simply replying to the email — no special wording required
-6. Caches each day's fetched report locally so re-running the same day doesn't hit Gmail or the
+6. Caches each day's fetched report in MySQL so re-running the same day doesn't hit Gmail or the
    DB again
 
 ## Architecture
@@ -27,22 +27,25 @@ src/db/updateTestcase.js   markTestcasesFailed(): existence-checks every failed 
 src/summarize/llmSummary.js Optional Ollama call; fails gracefully (empty summary) if unreachable.
 src/reminder/remainder.js  sendRemainder(): the single function that drives all outbound email.
 src/notify/ackNote.js      Shared "reply to acknowledge" HTML snippet.
-connect.js                 Local sqlite cache (local.db) — report_cache table + helpers.
+connect.js                 Report cache, per-recipient notification, and acknowledgment
+                           tables in MySQL — same connection as src/db/pool.js, table names
+                           configurable via env (see Environment variables below).
 ```
 
 ## How the daily cycle works
 
 Each run of `src/index.js`:
-1. Checks `local.db` (`connect.js`) for a cached report for `config.today`. Cache **hit** →
-   skip straight to step 4. Cache **miss** → fetch from Gmail.
+1. Checks the report cache table (`connect.js`, MySQL) for a cached report for `config.today`.
+   Cache **hit** → skip straight to step 4. Cache **miss** → fetch from Gmail.
 2. If a report is found: parses it, logs the Passed/Failed/Skipped/Flaky/Total summary, and:
    - **0 failures** → cached and immediately marked `acknowledged` (nothing to notify about).
    - **failures found** → runs `markTestcasesFailed()` (see below), requests an LLM summary,
      and caches the report along with the DB result and summary.
 3. (Cache miss with no report found for today, or fetch/parse errors, just log and move on.)
-4. `sendRemainder()` runs unconditionally on **every** run: it scans *all* unacknowledged
-   reports in `local.db` — not just today's — checks the inbox for a reply from anyone in
-   `AUDIENCE_EMAILS`, and either marks a report acknowledged (reply found) or (re)sends it.
+4. The reminder cycle runs unconditionally on **every** run: it scans *all* unacknowledged
+   reports in the cache — not just today's — checks the inbox for a reply from anyone in
+   the resolved audience (see Acknowledgment below), and either marks a report acknowledged
+   (reply found) or (re)sends it.
    The subject is `QA-AGENT: <subject>` the first time a report is sent, and
    `REMINDER: <subject>` every time after that.
 
@@ -62,13 +65,24 @@ explicit note that the DB was not touched because of it.
 logs what it *would* update. Uncomment that block once you're ready for it to write to the DB
 for real.
 
+## Audience
+
+The notification audience is **not** static config — it's resolved from the
+`DB_RECIPIENTS_TABLE` table (owned by other automation, not this agent) on every run, filtered
+to rows where `git_branch = AUDIENCE_GIT_BRANCH` and `email_enabled = 'yes'`
+(`src/db/audienceRecipients.js`). There's no fallback: if the table/branch aren't configured or
+the filtered result is empty, the run fails loudly rather than silently mailing no one or a
+stale list.
+
 ## Acknowledgment
 
 The audience acknowledges a report by **replying to the email** — nothing special to type.
-Mail clients auto-preserve the original subject as `Re: <subject>`, and since that subject
-already embeds the report's own date/time, that's enough to uniquely match it back to the
-right row in `local.db`. Detection logic lives in `remainder.js`: a reply counts if its sender
-is in `AUDIENCE_EMAILS` and its subject contains the original report's subject.
+Every notification sent to a recipient is recorded in its own row (report, recipient,
+Message-ID). A reply counts if its sender is in the resolved audience and it references one of
+those Message-IDs (`In-Reply-To`/`References`). Whoever replies **first** is recorded as the
+acknowledger; anyone else who replies afterward — even in a later run — gets a courtesy
+"already acknowledged by X" email instead of re-triggering or being silently dropped. Every
+reply is recorded once it's handled, so it's never processed twice.
 
 ## Setup
 
@@ -87,10 +101,11 @@ is in `AUDIENCE_EMAILS` and its subject contains the original report's subject.
 |---|---|
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` | IMAP login — also the mailbox `fetchInboxSince` scans for replies |
 | `GMAIL_REPORT_SENDER`, `GMAIL_REPORT_SUBJECT` | Filters which inbox email counts as the daily report |
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | MySQL connection (`mysql2` pool) |
-| `DB_TABLE`, `DB_TESTCASE_NAME_COLUMN`, `DB_EXECUTE_COLUMN` | Which table/columns `markTestcasesFailed` checks and (once uncommented) updates |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | MySQL connection (`mysql2` pool), shared by both the testcase table and the agent's own tables below |
+| `DB_TABLE`, `DB_TESTCASE_NAME_COLUMN`, `DB_EXECUTE_COLUMN` | Which QA testcase table/columns `markTestcaseForAtlas` checks and updates |
+| `DB_REPORT_CACHE_TABLE`, `DB_REPORT_NOTIFICATIONS_TABLE`, `DB_REPLY_RECEIPTS_TABLE` | Table names for the agent's own report cache / per-recipient notification / acknowledgment tracking (`connect.js`) — auto-created if missing; column names are fixed in `config.js` |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Outgoing mail (reports, reminders) |
-| `AUDIENCE_EMAILS` | Comma-separated recipient list; also who counts as a valid acknowledger |
+| `DB_RECIPIENTS_TABLE`, `AUDIENCE_GIT_BRANCH` | Which shared table/branch the notification audience is resolved from (see Audience above) — required, no fallback |
 | `OLLAMA_HOST`, `OLLAMA_MODEL` | Optional LLM summary — safe to leave unreachable, degrades to no summary |
 | `TODAY_DATE` | Optional override for `config.today` (e.g. `2026-09-17`), for testing against a specific date instead of real "today" |
 
@@ -104,8 +119,9 @@ in the codebase — `index.js`'s cache key and `gmailClient.js`'s IMAP search bo
 TODAY_DATE=2026-09-17 npm start
 ```
 
-`local.db` is git-ignored and safe to delete for a clean test slate — it just means the next
-run re-fetches from Gmail instead of using a cached copy.
+Truncating the `DB_REPORT_CACHE_TABLE`/`DB_REPORT_NOTIFICATIONS_TABLE`/`DB_REPLY_RECEIPTS_TABLE`
+tables gives a clean test slate — it just means the next run re-fetches from Gmail instead of
+using a cached copy.
 
 ## Scheduling
 

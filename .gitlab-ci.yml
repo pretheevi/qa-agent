@@ -2,10 +2,6 @@ qa-agent:
   image: node:20
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
-  cache:
-    key: qa-agent-local-db
-    paths:
-      - local.db
   script:
     - npm ci
     - node src/index.js

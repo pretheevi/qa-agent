@@ -5,7 +5,7 @@ import { sendNovaReminder, sendAtlasReminder } from './reminder/remainder.js';
 import { log } from './utils/logger.js';
 import { config, toLocalDateKey } from './config/config.js';
 import { pool } from './db/pool.js';
-import { getCachedReports, saveReportCache, closeLocalDb } from '../connect.js';
+import { getCachedReports, saveReportCache } from '../connect.js';
 
 async function run() {
   log('QA agent run started');
@@ -100,13 +100,32 @@ async function run() {
 
   log('Checking all unacknowledged reports and sending first-time reports / reminders as needed...');
 
+  // Each run independently — one report type's audience/DB failure (e.g. no enabled
+  // recipients for the configured git_branch) shouldn't stop the other type's reminders
+  // from going out. The run is still reported as failed overall so it's visible in CI.
+  let reminderFailed = false;
+
   log('Checking unacknowledged NOVA reports...');
-  await sendNovaReminder();
+  try {
+    await sendNovaReminder();
+  } catch (err) {
+    reminderFailed = true;
+    console.error('[NOVA Reminder] failed, continuing to ATLAS reminders anyway:', err.message);
+  }
 
   log('Checking unacknowledged ATLAS reports...');
-  await sendAtlasReminder();
+  try {
+    await sendAtlasReminder();
+  } catch (err) {
+    reminderFailed = true;
+    console.error('[ATLAS Reminder] failed:', err.message);
+  }
 
   log('QA agent run completed.');
+
+  if (reminderFailed) {
+    throw new Error('One or more reminder cycles failed — see errors above.');
+  }
 }
 
 run()
@@ -114,4 +133,4 @@ run()
     console.error('QA agent failed:', err);
     process.exitCode = 1;
   })
-  .finally(() => Promise.all([pool.end(), closeLocalDb()]));
+  .finally(() => pool.end());

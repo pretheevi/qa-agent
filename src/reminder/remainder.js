@@ -13,6 +13,16 @@ import {
   incrementReminder,
 } from '../../connect.js';
 import { ackInstructionsHtml } from '../notify/ackNote.js';
+import { resolveAudience } from '../db/audienceRecipients.js';
+
+// pool.js sets dateStrings: true, so MySQL DATETIME columns (always UTC — the RDS instance's
+// time_zone is UTC) come back as bare "YYYY-MM-DD HH:MM:SS" strings with no timezone marker.
+// new Date() on a string like that is parsed as LOCAL time, which would misread it by a full
+// UTC offset on any host not already in UTC (the same class of bug fixed for the cache-key
+// date in config.js — see toLocalDateKey). Parse it as UTC explicitly instead.
+function parseDbTimestampAsUTC(value) {
+  return new Date(`${value.replace(' ', 'T')}Z`);
+}
 
 function createTransporter() {
   return nodemailer.createTransport({
@@ -36,7 +46,7 @@ export async function sendAtlasReminder() {
 // Finds inbox replies that reference an email we actually sent for this report, sent by
 // someone in the audience, and not already handled in a previous run. Sorted oldest-first
 // so the caller can tell who replied first from anyone else replying later.
-async function findAckMatches(row, reportType, replies) {
+async function findAckMatches(row, reportType, replies, audience) {
   const notifications = await getReportNotifications(row.report_date, reportType);
 
   if (notifications.length === 0) return [];
@@ -45,7 +55,7 @@ async function findAckMatches(row, reportType, replies) {
 
   for (const reply of replies) {
     if (!reply.messageId) continue;
-    if (!config.smtp.audience.includes(reply.from)) continue;
+    if (!audience.includes(reply.from)) continue;
     if (await hasReplyBeenProcessed(reply.messageId)) continue;
 
     const references = Array.isArray(reply.references)
@@ -86,8 +96,8 @@ async function sendAlreadyAcknowledgedNotice(transporter, reportType, row, lateR
 // Already-acknowledged reports don't get reminders, but a reply that arrives after the
 // first acknowledgment (from a different audience member) still needs a courtesy reply
 // so that person knows it's already handled — otherwise it's silently dropped forever.
-async function handleLateReplies(row, reportType, replies, transporter) {
-  const lateReplies = await findAckMatches(row, reportType, replies);
+async function handleLateReplies(row, reportType, replies, transporter, audience) {
+  const lateReplies = await findAckMatches(row, reportType, replies, audience);
 
   for (const late of lateReplies) {
     await sendAlreadyAcknowledgedNotice(
@@ -112,6 +122,8 @@ async function sendReportReminders(reportType) {
     return;
   }
 
+  const audience = await resolveAudience();
+
   const allRows = [...pending, ...acknowledged];
   const oldestSentAt = allRows.reduce(
     (min, row) => (row.first_sent_at < min ? row.first_sent_at : min),
@@ -119,13 +131,13 @@ async function sendReportReminders(reportType) {
   );
 
   const replies = await fetchInboxSince({
-    since: new Date(oldestSentAt),
+    since: parseDbTimestampAsUTC(oldestSentAt),
   });
 
   const transporter = createTransporter();
 
   for (const row of acknowledged) {
-    await handleLateReplies(row, reportType, replies, transporter);
+    await handleLateReplies(row, reportType, replies, transporter, audience);
   }
 
   if (pending.length === 0) {
@@ -141,7 +153,7 @@ async function sendReportReminders(reportType) {
       `(${row.report_date}, reminder_count=${row.reminder_count})...`
     );
 
-    const matches = await findAckMatches(row, reportType, replies);
+    const matches = await findAckMatches(row, reportType, replies, audience);
 
     if (matches.length > 0) {
       const [acknowledger, ...lateReplies] = matches;
@@ -262,7 +274,7 @@ async function sendReportReminders(reportType) {
       </table>
     `;
 
-    for (const email of config.smtp.audience) {
+    for (const email of audience) {
       const info = await transporter.sendMail({
         from: config.smtp.user,
         to: email,
@@ -288,7 +300,7 @@ async function sendReportReminders(reportType) {
             <strong>${row.reminder_count}</strong> reminder(s).</p>
             <p>Report Type: <strong>${reportType}</strong></p>
             <p>Report: "${row.subject}" (${row.report_date})</p>
-            <p>Audience notified: ${config.smtp.audience.join(', ')}</p>
+            <p>Audience notified: ${audience.join(', ')}</p>
           `,
         });
       }
