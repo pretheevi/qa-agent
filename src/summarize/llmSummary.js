@@ -4,10 +4,10 @@ import { config } from '../config/config.js';
 export async function summarizeFailures(failures) {
   if (!failures.length) return '';
 
-  const prompt = `Write a brief but detailed summary of these failed QA testcases for a ` +
-    `non-technical audience. Use simple, everyday English — no jargon, no test IDs, no ` +
-    `code terms. Keep it short (3-5 sentences), but make sure every failed testcase is ` +
-    `mentioned and what actually went wrong with it is clear:\n` +
+  const prompt = `Explain these failed QA testcases in simple, plain terms so the reader can ` +
+    `quickly understand what went wrong with each one — the audience is technical (QA/dev ` +
+    `team), so keep the testcase names/IDs, just skip unnecessary verbosity. Keep it brief ` +
+    `(3-5 sentences), but cover every failed testcase and the actual reason it failed:\n` +
     failures.map(f => {
       // NOVA
       if (f.testcaseName) {
